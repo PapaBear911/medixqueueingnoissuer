@@ -1,7 +1,9 @@
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MultiDepartmentQueueing;
 
@@ -16,11 +18,13 @@ internal sealed record DepartmentAccount(string Name, string Code, string Userna
 internal sealed class AppSettings
 {
     public LogoSettings Logos { get; set; } = new();
+    public DisplayTextSettings DisplayText { get; set; } = new();
     public UiSettings UI { get; set; } = new();
     public AuthenticationSettings Authentication { get; set; } = new();
     public QueueStorageSettings QueueStorage { get; set; } = new();
     public PrintSettings Print { get; set; } = new();
     public SpeechSettings Speech { get; set; } = new();
+    public LicenseSettings License { get; set; } = new();
     public List<DepartmentSettings> Departments { get; set; } = [];
 
     public static AppSettings Load()
@@ -230,6 +234,13 @@ internal sealed class LogoSettings
     public string HospitalQueueCallerIconPath { get; set; } = "";
 }
 
+internal sealed class DisplayTextSettings
+{
+    public string WindowTitle { get; set; } = "Hospital Queueing Display";
+    public string HeaderTitle { get; set; } = "HOSPITAL QUEUEING SYSTEM";
+    public string NowServingTitle { get; set; } = "Now Serving";
+}
+
 internal sealed class UiSettings
 {
     public string Theme { get; set; } = "Dark";
@@ -322,6 +333,72 @@ internal sealed class SpeechSettings
     public int RepeatCount { get; set; } = 1;
     public int RepeatDelayMilliseconds { get; set; } = 1200;
     public string AnnouncementFormat { get; set; } = "Now serving number {Number}. Please proceed to {Counter}, {Department}.";
+    [JsonPropertyName("PronunciationOverrides")]
+    public Dictionary<string, string> PronunciationOverrides { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+internal sealed class LicenseSettings
+{
+    public string Token { get; set; } = "";
+}
+
+internal sealed record LicenseStatus(bool IsRegistered, bool IsExpired, DateTimeOffset? ExpiresAt, string Message);
+
+internal static class AppLicense
+{
+    public static LicenseStatus CheckDisplayLicense(LicenseSettings license)
+    {
+        if (string.IsNullOrWhiteSpace(license.Token))
+        {
+            return new LicenseStatus(false, true, null, "No display license is registered.");
+        }
+
+        var expiresAt = TryReadExpiration(license.Token);
+        if (expiresAt is null)
+        {
+            return new LicenseStatus(false, true, null, "The display license could not be read.");
+        }
+
+        if (DateTimeOffset.UtcNow >= expiresAt.Value)
+        {
+            return new LicenseStatus(true, true, expiresAt, "The display license has expired.");
+        }
+
+        return new LicenseStatus(true, false, expiresAt, "The display license is active.");
+    }
+
+    private static DateTimeOffset? TryReadExpiration(string token)
+    {
+        try
+        {
+            var parts = token.Split('.');
+            if (parts.Length < 2)
+            {
+                return null;
+            }
+
+            var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
+            using var payload = JsonDocument.Parse(payloadJson);
+            if (!payload.RootElement.TryGetProperty("exp", out var expProperty) ||
+                !expProperty.TryGetInt64(out var exp))
+            {
+                return null;
+            }
+
+            return DateTimeOffset.FromUnixTimeSeconds(exp);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static byte[] Base64UrlDecode(string value)
+    {
+        var padded = value.Replace('-', '+').Replace('_', '/');
+        padded = padded.PadRight(padded.Length + ((4 - padded.Length % 4) % 4), '=');
+        return Convert.FromBase64String(padded);
+    }
 }
 
 internal sealed class DepartmentSettings
@@ -411,11 +488,19 @@ internal sealed class SpeechVoiceInfo
 internal sealed class QueueAnnouncer
 {
     private readonly SpeechSettings settings;
+    private readonly string[] departmentCodes;
     private dynamic? voice;
 
-    public QueueAnnouncer(SpeechSettings settings)
+    public QueueAnnouncer(SpeechSettings settings, IEnumerable<DepartmentSettings>? departments = null)
     {
         this.settings = settings;
+        departmentCodes = (departments ?? [])
+            .Select(d => d.Code?.Trim().ToUpperInvariant())
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(code => code!.Length)
+            .Cast<string>()
+            .ToArray();
         voice = CreateVoice();
         ConfigureVoice(settings.VoiceName);
     }
@@ -461,11 +546,16 @@ internal sealed class QueueAnnouncer
             return;
         }
 
+        var numberForSpeech = ApplyPronunciationOverrides(SpellDepartmentCodes(call.DisplayNumber));
+        var departmentForSpeech = ApplyPronunciationOverrides(SpellDepartmentCodes(call.DepartmentName));
+        var counterForSpeech = ApplyPronunciationOverrides(SpellDepartmentCodes(call.CounterName));
+        var laneForSpeech = ApplyPronunciationOverrides(SpellDepartmentCodes(call.Kind == TicketKind.Priority ? "Priority Lane" : "Regular Lane"));
+
         var text = settings.AnnouncementFormat
-            .Replace("{Number}", call.DisplayNumber, StringComparison.OrdinalIgnoreCase)
-            .Replace("{Counter}", call.CounterName, StringComparison.OrdinalIgnoreCase)
-            .Replace("{Department}", call.DepartmentName, StringComparison.OrdinalIgnoreCase)
-            .Replace("{Lane}", call.Kind == TicketKind.Priority ? "Priority Lane" : "Regular Lane", StringComparison.OrdinalIgnoreCase);
+            .Replace("{Number}", numberForSpeech, StringComparison.OrdinalIgnoreCase)
+            .Replace("{Counter}", counterForSpeech, StringComparison.OrdinalIgnoreCase)
+            .Replace("{Department}", departmentForSpeech, StringComparison.OrdinalIgnoreCase)
+            .Replace("{Lane}", laneForSpeech, StringComparison.OrdinalIgnoreCase);
 
         var repeatCount = Math.Clamp(settings.RepeatCount, 1, 3);
         _ = Task.Run(async () =>
@@ -479,6 +569,52 @@ internal sealed class QueueAnnouncer
                 }
             }
         });
+    }
+
+    private string ApplyPronunciationOverrides(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || settings.PronunciationOverrides.Count == 0)
+        {
+            return text;
+        }
+
+        var spoken = text;
+        foreach (var pair in settings.PronunciationOverrides)
+        {
+            if (string.IsNullOrWhiteSpace(pair.Key) || string.IsNullOrWhiteSpace(pair.Value))
+            {
+                continue;
+            }
+
+            spoken = Regex.Replace(
+                spoken,
+                $@"\b{Regex.Escape(pair.Key)}\b",
+                pair.Value,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        return spoken;
+    }
+
+    private string SpellDepartmentCodes(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || departmentCodes.Length == 0)
+        {
+            return text;
+        }
+
+        var spoken = text;
+        foreach (var code in departmentCodes)
+        {
+            var spelled = string.Join(" ", code.ToCharArray());
+            spoken = Regex.Replace(
+                spoken,
+                $@"\b{Regex.Escape(code)}\b",
+                spelled,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        return spoken;
     }
 
     private void ConfigureVoice(string voiceName)
@@ -547,6 +683,7 @@ internal sealed class DepartmentQueue
 {
     public string Name { get; set; } = "";
     public string Code { get; set; } = "";
+    public string AccentColor { get; set; } = "#1D4ED8";
     public int NextRegular { get; set; } = 1;
     public int NextPriority { get; set; } = 1;
     public CalledTicket? Current { get; set; }
@@ -774,7 +911,12 @@ internal static class HospitalQueueData
             return department;
         }
 
-        department = new DepartmentQueue { Name = account.Name, Code = account.Code };
+        department = new DepartmentQueue
+        {
+            Name = account.Name,
+            Code = account.Code,
+            AccentColor = ColorTranslator.ToHtml(account.Accent)
+        };
         state.Departments.Add(department);
         return department;
     }
@@ -803,6 +945,7 @@ internal static class HospitalQueueData
                 {
                     Name = department.Name,
                     Code = department.Code,
+                    AccentColor = department.AccentColor,
                     NextRegular = 1,
                     NextPriority = 1
                 });
@@ -810,6 +953,7 @@ internal static class HospitalQueueData
             else
             {
                 existing.Name = department.Name;
+                existing.AccentColor = department.AccentColor;
             }
 
             return true;
@@ -839,6 +983,7 @@ internal static class HospitalQueueData
             {
                 Name = account.Name,
                 Code = account.Code,
+                AccentColor = ColorTranslator.ToHtml(account.Accent),
                 NextRegular = 1,
                 NextPriority = 1
             }).ToList()
@@ -858,13 +1003,26 @@ internal static class HospitalQueueData
                 {
                     Name = account.Name,
                     Code = account.Code,
+                    AccentColor = ColorTranslator.ToHtml(account.Accent),
                     NextRegular = 1,
                     NextPriority = 1
                 });
             }
             else
             {
-                existing.Name = account.Name;
+                var configuredAccent = ColorTranslator.ToHtml(account.Accent);
+                if (string.IsNullOrWhiteSpace(existing.Name))
+                {
+                    existing.Name = account.Name;
+                }
+
+                if (string.IsNullOrWhiteSpace(existing.AccentColor) ||
+                    string.Equals(existing.AccentColor, "#1D4ED8", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(configuredAccent, "#1D4ED8", StringComparison.OrdinalIgnoreCase))
+                {
+                    existing.AccentColor = configuredAccent;
+                }
+
                 configuredDepartments.Add(existing);
             }
         }
@@ -1011,6 +1169,136 @@ internal sealed class RoundedPanel : Panel
     }
 }
 
+internal sealed class LicenseOverlayPanel : Control
+{
+    private readonly ThemePalette theme;
+    private Image? blurredSnapshot;
+    private LicenseStatus status = new(false, true, null, "The display license has expired.");
+
+    public LicenseOverlayPanel(ThemePalette theme)
+    {
+        this.theme = theme;
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
+        Font = new Font("Segoe UI", 16F, FontStyle.Bold);
+    }
+
+    public void SetStatus(LicenseStatus status)
+    {
+        this.status = status;
+        Invalidate();
+    }
+
+    public void CaptureBoard(Control source)
+    {
+        if (source.Width <= 0 || source.Height <= 0)
+        {
+            return;
+        }
+
+        using var snapshot = new Bitmap(source.Width, source.Height);
+        source.DrawToBitmap(snapshot, new Rectangle(Point.Empty, source.Size));
+        blurredSnapshot?.Dispose();
+        blurredSnapshot = CreateSoftBlur(snapshot);
+        Invalidate();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+        if (blurredSnapshot is not null)
+        {
+            e.Graphics.DrawImage(blurredSnapshot, ClientRectangle);
+        }
+        else
+        {
+            using var backgroundBrush = new SolidBrush(theme.Background);
+            e.Graphics.FillRectangle(backgroundBrush, ClientRectangle);
+        }
+
+        using var veil = new SolidBrush(Color.FromArgb(188, theme.Background));
+        e.Graphics.FillRectangle(veil, ClientRectangle);
+
+        var boxWidth = Math.Min(760, Math.Max(360, ClientSize.Width - 80));
+        var boxHeight = 260;
+        var box = new Rectangle(
+            (ClientSize.Width - boxWidth) / 2,
+            (ClientSize.Height - boxHeight) / 2,
+            boxWidth,
+            boxHeight);
+
+        using var boxPath = RoundedRect(box, 24);
+        using var boxBrush = new SolidBrush(Color.FromArgb(236, theme.Card));
+        using var borderPen = new Pen(theme.Danger, 2);
+        e.Graphics.FillPath(boxBrush, boxPath);
+        e.Graphics.DrawPath(borderPen, boxPath);
+
+        var title = "DISPLAY LICENSE EXPIRED";
+        var expiryText = status.ExpiresAt is null
+            ? status.Message
+            : $"Expired on {status.ExpiresAt.Value.LocalDateTime:MMMM dd, yyyy hh:mm tt}.";
+        var detail = "Please register a valid display license to continue showing the queue board.";
+
+        DrawCenteredText(e.Graphics, title, new Font("Segoe UI", 28F, FontStyle.Bold), theme.Danger, box.X + 28, box.Y + 34, box.Width - 56, 58);
+        DrawCenteredText(e.Graphics, expiryText, new Font("Segoe UI", 16F, FontStyle.Bold), theme.CardText, box.X + 28, box.Y + 104, box.Width - 56, 40);
+        DrawCenteredText(e.Graphics, detail, new Font("Segoe UI", 13F, FontStyle.Regular), theme.CardSecondaryText, box.X + 40, box.Y + 158, box.Width - 80, 62);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            blurredSnapshot?.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
+    private static void DrawCenteredText(Graphics graphics, string text, Font font, Color color, int x, int y, int width, int height)
+    {
+        using (font)
+        using (var brush = new SolidBrush(color))
+        using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+        {
+            graphics.DrawString(text, font, brush, new RectangleF(x, y, width, height), format);
+        }
+    }
+
+    private static Bitmap CreateSoftBlur(Image source)
+    {
+        var smallWidth = Math.Max(1, source.Width / 14);
+        var smallHeight = Math.Max(1, source.Height / 14);
+        using var small = new Bitmap(smallWidth, smallHeight);
+        using (var graphics = Graphics.FromImage(small))
+        {
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.DrawImage(source, new Rectangle(0, 0, smallWidth, smallHeight));
+        }
+
+        var blurred = new Bitmap(source.Width, source.Height);
+        using (var graphics = Graphics.FromImage(blurred))
+        {
+            graphics.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            graphics.DrawImage(small, new Rectangle(0, 0, blurred.Width, blurred.Height));
+        }
+
+        return blurred;
+    }
+
+    private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
+    {
+        var diameter = Math.Min(radius * 2, Math.Min(bounds.Width, bounds.Height));
+        var path = new GraphicsPath();
+        path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+        path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
+}
+
 internal sealed class ModernButton : Button
 {
     private readonly Color fillColor;
@@ -1046,5 +1334,65 @@ internal sealed class ModernButton : Button
     {
         base.OnMouseLeave(e);
         BackColor = fillColor;
+    }
+}
+
+internal sealed class ToggleSwitch : CheckBox
+{
+    public Color ParentBackColor { get; set; } = Color.Transparent;
+    public Color TrackOnColor { get; set; } = Color.FromArgb(34, 197, 94);
+    public Color TrackOffColor { get; set; } = Color.FromArgb(148, 163, 184);
+    public Color ThumbColor { get; set; } = Color.White;
+
+    public ToggleSwitch()
+    {
+        MinimumSize = new Size(52, 28);
+        AutoSize = false;
+        Cursor = Cursors.Hand;
+        Text = string.Empty;
+        Appearance = Appearance.Normal;
+        FlatStyle = FlatStyle.Flat;
+        FlatAppearance.BorderSize = 0;
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+        BackColor = Color.Transparent;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var bounds = ClientRectangle;
+        e.Graphics.Clear(ParentBackColor == Color.Transparent ? (Parent?.BackColor ?? BackColor) : ParentBackColor);
+        var trackColor = Checked ? TrackOnColor : TrackOffColor;
+
+        using var trackPath = RoundedRect(new Rectangle(1, 1, bounds.Width - 2, bounds.Height - 2), (bounds.Height - 2) / 2);
+        using var trackBrush = new SolidBrush(trackColor);
+        e.Graphics.FillPath(trackBrush, trackPath);
+        using (var borderPen = new Pen(Color.FromArgb(60, Color.Black), 1))
+        {
+            e.Graphics.DrawPath(borderPen, trackPath);
+        }
+
+        var thumbSize = bounds.Height - 8;
+        var thumbX = Checked ? bounds.Width - thumbSize - 5 : 5;
+        var thumbRect = new Rectangle(thumbX, 4, thumbSize, thumbSize);
+        using var thumbBrush = new SolidBrush(ThumbColor);
+        e.Graphics.FillEllipse(thumbBrush, thumbRect);
+        using (var thumbPen = new Pen(Color.FromArgb(55, Color.Black), 1))
+        {
+            e.Graphics.DrawEllipse(thumbPen, thumbRect);
+        }
+    }
+
+    private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
+    {
+        var diameter = Math.Min(radius * 2, Math.Min(bounds.Width, bounds.Height));
+        var path = new GraphicsPath();
+        path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+        path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+        path.CloseFigure();
+        return path;
     }
 }

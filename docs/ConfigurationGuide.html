@@ -6,6 +6,9 @@
   <style>
     body { font-family: Segoe UI, Arial, sans-serif; color: #111827; margin: 36px; line-height: 1.45; }
     h1, h2 { color: #0f172a; }
+    table { border-collapse: collapse; margin: 12px 0 20px; }
+    th, td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; }
+    th { background: #e2e8f0; }
     code, pre { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; }
     code { padding: 2px 5px; }
     pre { padding: 12px; overflow: auto; }
@@ -14,7 +17,23 @@
 </head>
 <body>
   <h1>Hospital Queueing System Configuration Guide</h1>
-  <p><b>Apps:</b> MultiDepartmentQueueing, HospitalQueueCaller, and HospitalQueueIssuer.</p>
+  <p><b>Apps:</b> MultiDepartmentQueueing display/dashboard and HospitalQueueCaller counter app.</p>
+
+  <h2>Logos and Display Text</h2>
+  <p>Logo paths are relative to each app folder unless an absolute path is provided.</p>
+  <pre>"Logos": {
+  "MainLogoPath": "assets/logos/MedixHMSFullLogo.png",
+  "SecondaryLogoPath": "assets/logos/SKPH Hospital Logo.png",
+  "MultiDepartmentQueueingIconPath": "assets/icons/MultiDepartmentQueueing.png",
+  "HospitalQueueCallerIconPath": "assets/icons/MedixHMSIcon.png"
+},
+"DisplayText": {
+  "WindowTitle": "Hospital Queueing Display",
+  "HeaderTitle": "Sultan Kudarat Provincial Hospital Queuing System",
+  "NowServingTitle": "Now Serving"
+}</pre>
+  <p>The caller app uses the Medix HMS logo and <code>HospitalQueueCallerIconPath</code>; its secondary display logo is blank.</p>
+
   <h2>Queue Storage</h2>
   <pre>"QueueStorage": {
   "StateFilePath": "%LOCALAPPDATA%/HospitalQueueingSystem/hospital_queue_state.json"
@@ -22,13 +41,54 @@
   <p>Use the same path in all apps. For LAN deployment, use a shared path like:</p>
   <pre>"StateFilePath": "//192.168.1.200/HospitalQueueData/hospital_queue_state.json"</pre>
   <p>Do not store PC credentials in the app. Use Windows sharing permissions or Credential Manager.</p>
-  <h2>Logos</h2>
-  <p>Logo paths are relative to the app folder unless an absolute path is provided.</p>
+
   <h2>Departments</h2>
-  <pre>{ "Name": "Emergency", "Code": "EMR", "AccentColor": "#DC2626" }</pre>
-  <p>The code controls ticket number format such as <code>EMR-R001</code> and <code>EMR-P001</code>.</p>
+  <pre>{ "Name": "Dental", "Code": "DEN", "AccentColor": "#2563EB" }</pre>
+  <p>Both apps currently have the same 17 departments. The code controls ticket formats such as <code>DEN-R001</code> and <code>DEN-P001</code>.</p>
+  <table>
+    <thead><tr><th>Department</th><th>Code</th></tr></thead>
+    <tbody>
+      <tr><td>Dental</td><td>DEN</td></tr>
+      <tr><td>Animal Bite</td><td>AB</td></tr>
+      <tr><td>Family Planning</td><td>FP</td></tr>
+      <tr><td>Ophthalmology</td><td>OPT</td></tr>
+      <tr><td>OB-Gyne</td><td>OBG</td></tr>
+      <tr><td>Surgery</td><td>SUR</td></tr>
+      <tr><td>Orthopedic</td><td>ORT</td></tr>
+      <tr><td>Urology</td><td>URO</td></tr>
+      <tr><td>Family Medicine</td><td>FM</td></tr>
+      <tr><td>Pediatrics</td><td>PED</td></tr>
+      <tr><td>Internal Medicine - Cardiology</td><td>IMC</td></tr>
+      <tr><td>Internal Medicine - Neurology</td><td>NEU</td></tr>
+      <tr><td>Internal Medicine - Nephrology</td><td>NEP</td></tr>
+      <tr><td>Internal Medicine - Pulmonology</td><td>PUL</td></tr>
+      <tr><td>Internal Medicine - Gastroenterology</td><td>GAS</td></tr>
+      <tr><td>Internal Medicine - Oncology</td><td>ONC</td></tr>
+      <tr><td>FAMED-AnimalBite</td><td>FAB</td></tr>
+    </tbody>
+  </table>
+
   <h2>Caller Users</h2>
   <pre>username|password|departmentCode|displayName</pre>
+  <p>The current user file has one login for each configured department.</p>
+  <pre>dental|1234|DEN|Dental
+animalbite|1234|AB|Animal Bite
+familyplanning|1234|FP|Family Planning
+opthalmology|1234|OPT|Ophthalmology
+obgyne|1234|OBG|OB-Gyne
+surgery|1234|SUR|Surgery
+orthopedic|1234|ORT|Orthopedic
+urology|1234|URO|Urology
+familymedicine|1234|FM|Family Medicine
+pediatrics|1234|PED|Pediatrics
+cardiology|1234|IMC|Internal Medicine - Cardiology
+neurology|1234|NEU|Internal Medicine - Neurology
+nephrology|1234|NEP|Internal Medicine - Nephrology
+pulmonology|1234|PUL|Internal Medicine - Pulmonology
+gastroenterology|1234|GAS|Internal Medicine - Gastroenterology
+oncology|1234|ONC|Internal Medicine - Oncology
+famedanimalbite|1234|FAB|FAMED-AnimalBite</pre>
+
   <h2>Print</h2>
   <pre>"Print": {
   "PrinterMode": "Default",
@@ -38,10 +98,27 @@
   "PaperWidthHundredthsInch": 228,
   "PaperHeightHundredthsInch": 354
 }</pre>
-  <p>The issuer saves each ticket to the temp folder before printing.</p>
+  <p>Ticket and print settings are shared configuration values for queue ticket workflows.</p>
+
   <h2>Speech</h2>
-  <p>The display uses installed free Windows voices. Placeholders: <code>{Number}</code>, <code>{Counter}</code>, <code>{Department}</code>, <code>{Lane}</code>.</p>
+  <p>Display app speech is enabled; caller app speech is disabled. The display uses installed Windows voices and supports placeholders <code>{Number}</code>, <code>{Counter}</code>, <code>{Department}</code>, and <code>{Lane}</code>.</p>
+  <pre>"VoiceName": "Microsoft David Desktop",
+"PronunciationOverrides": {
+  "AB": "ey bi",
+  "AP": "ey bi"
+}</pre>
+
+  <h2>UI Theme</h2>
+  <p><code>UI.Theme</code> can be <code>Dark</code> or <code>Light</code>. Display defaults to dark mode; caller defaults to light mode.</p>
+
   <h2>Daily Reset</h2>
-  <p>Numbers reset automatically each day for all departments.</p>
+  <p>Regular and priority numbers reset to 001 each day, and waiting tickets plus recent calls are cleared.</p>
+
+  <h2>Verify Build</h2>
+  <pre>$env:DOTNET_CLI_HOME='C:\Users\Ver\OneDrive\Documents\QueueuingNoIssuer\.dotnet_home'
+$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1'
+dotnet build .\HospitalQueueCaller\HospitalQueueCaller.csproj -o .\verify-build\caller
+dotnet build .\MultiDepartmentQueueing\MultiDepartmentQueueing.csproj -o .\verify-build\display</pre>
+  <p>Expected outputs are <code>verify-build/caller/HospitalQueueCaller.exe</code> and <code>verify-build/display/MultiDepartmentQueueing.exe</code>.</p>
 </body>
 </html>
