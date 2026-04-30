@@ -1,0 +1,7 @@
+# username|password|departmentCode|displayName
+pharmacy|1234|PHA|Pharmacy
+laboratory|1234|LAB|Laboratory
+radiology|1234|RAD|Radiology
+yakap|1234|YKP|Yakap
+cashier|1234|PAY|Cashier
+opd|1234|OPD|Out Patient Department

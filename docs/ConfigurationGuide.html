@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Hospital Queueing System Configuration Guide</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; color: #111827; margin: 36px; line-height: 1.45; }
+    h1, h2 { color: #0f172a; }
+    code, pre { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; }
+    code { padding: 2px 5px; }
+    pre { padding: 12px; overflow: auto; }
+    li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Hospital Queueing System Configuration Guide</h1>
+  <p><b>Apps:</b> MultiDepartmentQueueing, HospitalQueueCaller, and HospitalQueueIssuer.</p>
+  <h2>Queue Storage</h2>
+  <pre>"QueueStorage": {
+  "StateFilePath": "%LOCALAPPDATA%/HospitalQueueingSystem/hospital_queue_state.json"
+}</pre>
+  <p>Use the same path in all apps. For LAN deployment, use a shared path like:</p>
+  <pre>"StateFilePath": "//192.168.1.200/HospitalQueueData/hospital_queue_state.json"</pre>
+  <p>Do not store PC credentials in the app. Use Windows sharing permissions or Credential Manager.</p>
+  <h2>Logos</h2>
+  <p>Logo paths are relative to the app folder unless an absolute path is provided.</p>
+  <h2>Departments</h2>
+  <pre>{ "Name": "Emergency", "Code": "EMR", "AccentColor": "#DC2626" }</pre>
+  <p>The code controls ticket number format such as <code>EMR-R001</code> and <code>EMR-P001</code>.</p>
+  <h2>Caller Users</h2>
+  <pre>username|password|departmentCode|displayName</pre>
+  <h2>Print</h2>
+  <pre>"Print": {
+  "PrinterMode": "Default",
+  "PrinterName": "",
+  "TicketTempFolder": "%TEMP%/HospitalQueueTickets",
+  "PaperName": "Queue Ticket 58x90mm",
+  "PaperWidthHundredthsInch": 228,
+  "PaperHeightHundredthsInch": 354
+}</pre>
+  <p>The issuer saves each ticket to the temp folder before printing.</p>
+  <h2>Speech</h2>
+  <p>The display uses installed free Windows voices. Placeholders: <code>{Number}</code>, <code>{Counter}</code>, <code>{Department}</code>, <code>{Lane}</code>.</p>
+  <h2>Daily Reset</h2>
+  <p>Numbers reset automatically each day for all departments.</p>
+</body>
+</html>

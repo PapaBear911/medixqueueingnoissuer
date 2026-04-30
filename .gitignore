@@ -1,0 +1,19 @@
+# Build outputs
+bin/
+obj/
+verify-build/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# .NET local state
+.dotnet_home/
+
+# OS/editor noise
+Thumbs.db
+Desktop.ini
+.DS_Store
