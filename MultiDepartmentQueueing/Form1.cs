@@ -6,10 +6,14 @@ public partial class Form1 : Form
     private ThemePalette theme = null!;
     private HiddenScrollFlowPanel departmentList = null!;
     private HiddenScrollFlowPanel recentList = null!;
-    private Label clockLabel = null!;
+    private Label headerTitleLabel = null!;
+    private Label heroTimeLabel = null!;
     private Label headlineNumber = null!;
     private Label headlineMeta = null!;
+    private PictureBox heroLeftLogo = null!;
+    private PictureBox heroRightLogo = null!;
     private ComboBox voiceCombo = null!;
+    private ToggleSwitch modeToggle = null!;
     private QueueAnnouncer announcer = null!;
     private string lastAnnouncedCallKey = "";
     private System.Windows.Forms.Timer refreshTimer = null!;
@@ -32,7 +36,7 @@ public partial class Form1 : Form
         settings = AppSettings.Load();
         useLightMode = string.Equals(settings.UI.Theme, "Light", StringComparison.OrdinalIgnoreCase);
         theme = settings.Palette;
-        announcer = new QueueAnnouncer(settings.Speech);
+        announcer = new QueueAnnouncer(settings.Speech, settings.Departments);
     }
 
     private void ApplyThemeChoice()
@@ -44,7 +48,7 @@ public partial class Form1 : Form
     {
         SuspendLayout();
         Controls.Clear();
-        Text = "Hospital Queueing Display";
+        Text = TextOrDefault(settings.DisplayText.WindowTitle, "Hospital Queueing Display");
         BackColor = theme.Background;
         Font = new Font("Segoe UI", 10F);
         FormBorderStyle = FormBorderStyle.None;
@@ -62,7 +66,7 @@ public partial class Form1 : Form
             ColumnCount = 1,
             RowCount = 3
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 120));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
         Controls.Add(root);
@@ -78,53 +82,30 @@ public partial class Form1 : Form
         refreshTimer.Start();
 
         ResumeLayout();
+        RequestHeaderTitleRefit();
     }
 
     private Control BuildHeader()
     {
-        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = theme.Background };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
-
-        var mainLogo = MakeLogoBox(settings.ResolvePath(settings.Logos.MainLogoPath), PictureBoxSizeMode.Zoom, ContentAlignment.MiddleLeft);
-
-        var titleBlock = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = theme.Background, Padding = new Padding(12, 0, 12, 0) };
-        titleBlock.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        titleBlock.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var eyebrow = MakeLabel("HOSPITAL QUEUEING SYSTEM", 12, FontStyle.Bold, theme.Accent, theme.Background);
-        eyebrow.TextAlign = ContentAlignment.MiddleCenter;
-        var nowServing = MakeLabel("Now Serving", 34, FontStyle.Bold, theme.PrimaryText, theme.Background);
-        nowServing.TextAlign = ContentAlignment.MiddleCenter;
-        titleBlock.Controls.Add(eyebrow, 0, 0);
-        titleBlock.Controls.Add(nowServing, 0, 1);
-
-        var rightBlock = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, BackColor = theme.Background };
-        rightBlock.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
-        rightBlock.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
-        rightBlock.Controls.Add(MakeLogoBox(settings.ResolvePath(settings.Logos.SecondaryLogoPath), PictureBoxSizeMode.Zoom, ContentAlignment.MiddleRight), 0, 0);
-        var rightStack = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, BackColor = theme.Background };
-        rightStack.RowStyles.Add(new RowStyle(SizeType.Percent, 38));
-        rightStack.RowStyles.Add(new RowStyle(SizeType.Percent, 31));
-        rightStack.RowStyles.Add(new RowStyle(SizeType.Percent, 31));
-        clockLabel = MakeLabel("", 12, FontStyle.Bold, theme.SecondaryText, theme.Background);
-        clockLabel.TextAlign = ContentAlignment.MiddleRight;
-        voiceCombo = MakeVoiceCombo();
-        var themeButton = new ModernButton(useLightMode ? "Dark Mode" : "Light Mode", theme.Accent)
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 1, BackColor = theme.Background };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        headerTitleLabel = new Label
         {
+            Text = TextOrDefault(settings.DisplayText.HeaderTitle, "HOSPITAL QUEUEING SYSTEM").ToUpperInvariant(),
+            ForeColor = theme.PrimaryText,
+            BackColor = theme.Background,
             Dock = DockStyle.Fill,
-            Margin = new Padding(10, 4, 0, 4),
-            Font = new Font("Segoe UI", 10F, FontStyle.Bold)
+            TextAlign = ContentAlignment.MiddleCenter,
+            AutoSize = false,
+            AutoEllipsis = false,
+            UseCompatibleTextRendering = true,
+            Padding = new Padding(16, 4, 16, 4),
+            Font = new Font("Segoe UI", 40F, FontStyle.Bold)
         };
-        themeButton.Click += (_, _) => ToggleTheme();
-        rightStack.Controls.Add(clockLabel, 0, 0);
-        rightStack.Controls.Add(voiceCombo, 0, 1);
-        rightStack.Controls.Add(themeButton, 0, 2);
-        rightBlock.Controls.Add(rightStack, 1, 0);
-
-        header.Controls.Add(mainLogo, 0, 0);
-        header.Controls.Add(titleBlock, 1, 0);
-        header.Controls.Add(rightBlock, 2, 0);
+        headerTitleLabel.SizeChanged += (_, _) => RequestHeaderTitleRefit();
+        headerTitleLabel.TextChanged += (_, _) => RequestHeaderTitleRefit();
+        header.Controls.Add(headerTitleLabel, 0, 0);
         return header;
     }
 
@@ -135,19 +116,53 @@ public partial class Form1 : Form
             Dock = DockStyle.Fill,
             Radius = 24,
             BackColor = theme.Surface,
-            Padding = new Padding(34),
+            Padding = new Padding(28),
             Margin = new Padding(0, 4, 0, 22)
         };
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = theme.Surface };
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 72));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 28));
-        headlineNumber = MakeLabel("--", 76, FontStyle.Bold, theme.PrimaryText, theme.Surface);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = theme.Surface, Margin = new Padding(0), Padding = new Padding(0) };
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 16));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 84));
+        heroTimeLabel = MakeLabel("", 30, FontStyle.Bold, theme.SecondaryText, theme.Surface);
+        heroTimeLabel.TextAlign = ContentAlignment.MiddleCenter;
+        layout.Controls.Add(heroTimeLabel, 0, 0);
+
+        var main = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = theme.Surface, Margin = new Padding(0), Padding = new Padding(0) };
+        main.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+        main.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
+        main.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+
+        heroLeftLogo = new PictureBox
+        {
+            Image = AppImages.LoadImage(settings.ResolvePath(settings.Logos.MainLogoPath)),
+            Dock = DockStyle.Fill,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            BackColor = theme.Surface,
+            Margin = new Padding(0, 0, 10, 0)
+        };
+        heroRightLogo = new PictureBox
+        {
+            Image = AppImages.LoadImage(settings.ResolvePath(settings.Logos.SecondaryLogoPath)),
+            Dock = DockStyle.Fill,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            BackColor = theme.Surface,
+            Margin = new Padding(10, 0, 0, 0)
+        };
+
+        var center = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = theme.Surface, Margin = new Padding(0), Padding = new Padding(0) };
+        center.RowStyles.Add(new RowStyle(SizeType.Percent, 64));
+        center.RowStyles.Add(new RowStyle(SizeType.Percent, 36));
+        headlineNumber = MakeLabel("--", 116, FontStyle.Bold, theme.PrimaryText, theme.Surface);
         headlineNumber.TextAlign = ContentAlignment.MiddleCenter;
-        headlineMeta = MakeLabel("Please wait for your number to be called", 22, FontStyle.Bold, theme.SecondaryText, theme.Surface);
+        headlineMeta = MakeLabel("Please wait for your number to be called", 43, FontStyle.Bold, theme.CardText, theme.Surface);
         headlineMeta.TextAlign = ContentAlignment.MiddleCenter;
-        layout.Controls.Add(headlineNumber, 0, 0);
-        layout.Controls.Add(headlineMeta, 0, 1);
+        center.Controls.Add(headlineNumber, 0, 0);
+        center.Controls.Add(headlineMeta, 0, 1);
+
+        main.Controls.Add(heroLeftLogo, 0, 0);
+        main.Controls.Add(center, 1, 0);
+        main.Controls.Add(heroRightLogo, 2, 0);
+        layout.Controls.Add(main, 0, 1);
         hero.Controls.Add(layout);
         return hero;
     }
@@ -169,8 +184,68 @@ public partial class Form1 : Form
         departmentList.Resize += (_, _) => ResizeDepartmentCards();
 
         lower.Controls.Add(departmentList, 0, 0);
-        lower.Controls.Add(BuildRecentPanel(), 1, 0);
+        lower.Controls.Add(BuildRightRail(), 1, 0);
         return lower;
+    }
+
+    private Control BuildRightRail()
+    {
+        var rail = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = theme.Background };
+        rail.RowStyles.Add(new RowStyle(SizeType.Percent, 80));
+        rail.RowStyles.Add(new RowStyle(SizeType.Percent, 20));
+        rail.Controls.Add(BuildRecentPanel(), 0, 0);
+        rail.Controls.Add(BuildDisplayControlsPanel(), 0, 1);
+        return rail;
+    }
+
+    private Control BuildDisplayControlsPanel()
+    {
+        var card = new RoundedPanel
+        {
+            Dock = DockStyle.Fill,
+            Radius = 12,
+            BackColor = theme.Card,
+            Padding = new Padding(12),
+            Margin = new Padding(0, 10, 0, 0)
+        };
+
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, BackColor = theme.Card };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 72));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var voiceLabel = MakeLabel("Voice", 10, FontStyle.Bold, theme.CardSecondaryText, theme.Card);
+        var modeLabel = MakeLabel("Dark/Light", 10, FontStyle.Bold, theme.CardSecondaryText, theme.Card);
+        voiceCombo = MakeVoiceCombo();
+        voiceCombo.Margin = new Padding(0, 2, 8, 0);
+        modeToggle = new ToggleSwitch
+        {
+            Dock = DockStyle.Left,
+            Width = 58,
+            Height = 28,
+            Margin = new Padding(0, 2, 0, 0),
+            Checked = !useLightMode,
+            ParentBackColor = theme.Card,
+            TrackOnColor = useLightMode ? Color.FromArgb(37, 99, 235) : Color.FromArgb(34, 197, 94),
+            TrackOffColor = useLightMode ? Color.FromArgb(148, 163, 184) : Color.FromArgb(100, 116, 139),
+            ThumbColor = Color.White
+        };
+        modeToggle.CheckedChanged += (_, _) =>
+        {
+            var shouldBeLight = !modeToggle.Checked;
+            if (shouldBeLight != useLightMode)
+            {
+                ToggleTheme();
+            }
+        };
+
+        layout.Controls.Add(voiceLabel, 0, 0);
+        layout.Controls.Add(modeLabel, 1, 0);
+        layout.Controls.Add(voiceCombo, 0, 1);
+        layout.Controls.Add(modeToggle, 1, 1);
+        card.Controls.Add(layout);
+        return card;
     }
 
     private Control BuildRecentPanel()
@@ -198,10 +273,11 @@ public partial class Form1 : Form
 
     private void RefreshBoard(bool force)
     {
-        var clockText = DateTime.Now.ToString("dddd, MMM dd yyyy  hh:mm tt");
+        var now = DateTime.Now;
+        var clockText = now.ToString("dddd, MMM dd yyyy  hh:mm:ss tt");
         if (clockText != lastClockText)
         {
-            clockLabel.Text = clockText;
+            heroTimeLabel.Text = clockText;
             lastClockText = clockText;
         }
 
@@ -387,7 +463,7 @@ public partial class Form1 : Form
             BackColor = theme.Surface,
             ForeColor = theme.PrimaryText,
             Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-            Margin = new Padding(10, 2, 0, 2)
+            Margin = new Padding(0, 2, 0, 0)
         };
 
         combo.Items.Add("Default Windows Voice");
@@ -438,6 +514,68 @@ public partial class Form1 : Form
             TextAlign = ContentAlignment.MiddleLeft,
             UseCompatibleTextRendering = false
         };
+    }
+
+    private static string TextOrDefault(string? value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    }
+
+    private void RefitHeaderTitle()
+    {
+        if (headerTitleLabel is null || headerTitleLabel.Width <= 0 || string.IsNullOrWhiteSpace(headerTitleLabel.Text))
+        {
+            return;
+        }
+
+        using var graphics = headerTitleLabel.CreateGraphics();
+        var availableWidth = Math.Max(1, headerTitleLabel.ClientSize.Width - headerTitleLabel.Padding.Horizontal - 6);
+        var availableHeight = Math.Max(1, headerTitleLabel.ClientSize.Height - headerTitleLabel.Padding.Vertical - 2);
+        for (var size = 40F; size >= 14F; size -= 0.5F)
+        {
+            using var font = new Font("Segoe UI", size, FontStyle.Bold);
+            var measured = graphics.MeasureString(headerTitleLabel.Text, font, new SizeF(availableWidth, availableHeight));
+            if (measured.Width <= availableWidth && measured.Height <= availableHeight)
+            {
+                if (Math.Abs(headerTitleLabel.Font.Size - size) > 0.1F)
+                {
+                    headerTitleLabel.Font = new Font("Segoe UI", size, FontStyle.Bold);
+                }
+
+                return;
+            }
+        }
+
+        headerTitleLabel.Font = new Font("Segoe UI", 14F, FontStyle.Bold);
+    }
+
+    private void RequestHeaderTitleRefit()
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        if (!IsHandleCreated)
+        {
+            HandleCreated -= RefitHeaderTitleAfterHandleCreated;
+            HandleCreated += RefitHeaderTitleAfterHandleCreated;
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(RefitHeaderTitle));
+            return;
+        }
+
+        RefitHeaderTitle();
+    }
+
+    private void RefitHeaderTitleAfterHandleCreated(object? sender, EventArgs e)
+    {
+        HandleCreated -= RefitHeaderTitleAfterHandleCreated;
+        RequestHeaderTitleRefit();
     }
 
     private static Color Blend(Color foreground, Color background, float amount)
