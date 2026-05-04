@@ -1,18 +1,18 @@
 # username|password|departmentCode|displayName
-dental|1234|DEN|Dental
 animalbite|1234|AB|Animal Bite
-familyplanning|1234|FP|Family Planning
-opthalmology|1234|OPT|Ophthalmology
-obgyne|1234|OBG|OB-Gyne
-surgery|1234|SUR|Surgery
-orthopedic|1234|ORT|Orthopedic
-urology|1234|URO|Urology
-familymedicine|1234|FM|Family Medicine
-pediatrics|1234|PED|Pediatrics
-cardiology|1234|IMC|Internal Medicine - Cardiology
-neurology|1234|NEU|Internal Medicine - Neurology
-nephrology|1234|NEP|Internal Medicine - Nephrology
-pulmonology|1234|PUL|Internal Medicine - Pulmonology
-gastroenterology|1234|GAS|Internal Medicine - Gastroenterology
-oncology|1234|ONC|Internal Medicine - Oncology
+dental|1234|DEN|Dental
 famedanimalbite|1234|FAB|FAMED-AnimalBite
+familymedicine|1234|FM|Family Medicine
+familyplanning|1234|FP|Family Planning
+gastroenterology|1234|GAS|Internal Medicine-Gastroenterology
+cardiology|1234|IMC|Internal Medicine-Cardiology
+nephrology|1234|NEP|Internal Medicine-Nephrology
+neurology|1234|NEU|Internal Medicine-Neurology
+obgyne|1234|OBG|OB-Gyne
+oncology|1234|ONC|Internal Medicine-Oncology
+opthalmology|1234|OPT|Ophthalmology
+orthopedic|1234|ORT|Orthopedic
+pediatrics|1234|PED|Pediatrics
+pulmonology|1234|PUL|Internal Medicine-Pulmonology
+surgery|1234|SUR|Surgery
+urology|1234|URO|Urology

@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HospitalQueueCaller", "Hosp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MultiDepartmentQueueing", "MultiDepartmentQueueing\MultiDepartmentQueueing.csproj", "{A3A3AF9F-89D6-536A-95BC-E03B47118E43}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HospitalQueueAdminSetup", "HospitalQueueAdminSetup\HospitalQueueAdminSetup.csproj", "{FC8F747E-8895-4F3F-8F7C-FF5D204258DF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,6 +22,10 @@ Global
 		{A3A3AF9F-89D6-536A-95BC-E03B47118E43}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A3A3AF9F-89D6-536A-95BC-E03B47118E43}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A3A3AF9F-89D6-536A-95BC-E03B47118E43}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FC8F747E-8895-4F3F-8F7C-FF5D204258DF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FC8F747E-8895-4F3F-8F7C-FF5D204258DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FC8F747E-8895-4F3F-8F7C-FF5D204258DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FC8F747E-8895-4F3F-8F7C-FF5D204258DF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

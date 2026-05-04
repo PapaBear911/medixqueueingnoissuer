@@ -333,8 +333,6 @@ internal sealed class SpeechSettings
     public int RepeatCount { get; set; } = 1;
     public int RepeatDelayMilliseconds { get; set; } = 1200;
     public string AnnouncementFormat { get; set; } = "Now serving number {Number}. Please proceed to {Counter}, {Department}.";
-    [JsonPropertyName("PronunciationOverrides")]
-    public Dictionary<string, string> PronunciationOverrides { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 internal sealed class LicenseSettings
@@ -489,6 +487,9 @@ internal sealed class QueueAnnouncer
 {
     private readonly SpeechSettings settings;
     private readonly string[] departmentCodes;
+    private readonly object speechQueueLock = new();
+    private readonly Queue<SpeechRequest> speechQueue = new();
+    private bool isProcessingSpeechQueue;
     private dynamic? voice;
 
     public QueueAnnouncer(SpeechSettings settings, IEnumerable<DepartmentSettings>? departments = null)
@@ -546,10 +547,10 @@ internal sealed class QueueAnnouncer
             return;
         }
 
-        var numberForSpeech = ApplyPronunciationOverrides(SpellDepartmentCodes(call.DisplayNumber));
-        var departmentForSpeech = ApplyPronunciationOverrides(SpellDepartmentCodes(call.DepartmentName));
-        var counterForSpeech = ApplyPronunciationOverrides(SpellDepartmentCodes(call.CounterName));
-        var laneForSpeech = ApplyPronunciationOverrides(SpellDepartmentCodes(call.Kind == TicketKind.Priority ? "Priority Lane" : "Regular Lane"));
+        var numberForSpeech = SpellDepartmentCodes(call.DisplayNumber);
+        var departmentForSpeech = SpellDepartmentCodes(call.DepartmentName);
+        var counterForSpeech = SpellDepartmentCodes(call.CounterName);
+        var laneForSpeech = SpellDepartmentCodes(call.Kind == TicketKind.Priority ? "Priority Lane" : "Regular Lane");
 
         var text = settings.AnnouncementFormat
             .Replace("{Number}", numberForSpeech, StringComparison.OrdinalIgnoreCase)
@@ -558,42 +559,50 @@ internal sealed class QueueAnnouncer
             .Replace("{Lane}", laneForSpeech, StringComparison.OrdinalIgnoreCase);
 
         var repeatCount = Math.Clamp(settings.RepeatCount, 1, 3);
-        _ = Task.Run(async () =>
+        EnqueueSpeech(text, repeatCount);
+    }
+
+    private void EnqueueSpeech(string text, int repeatCount)
+    {
+        lock (speechQueueLock)
         {
-            for (var i = 0; i < repeatCount; i++)
+            speechQueue.Enqueue(new SpeechRequest(text, repeatCount));
+            if (isProcessingSpeechQueue)
             {
-                Speak(text);
-                if (i < repeatCount - 1)
+                return;
+            }
+
+            isProcessingSpeechQueue = true;
+        }
+
+        _ = Task.Run(ProcessSpeechQueue);
+    }
+
+    private async Task ProcessSpeechQueue()
+    {
+        while (true)
+        {
+            SpeechRequest request;
+            lock (speechQueueLock)
+            {
+                if (speechQueue.Count == 0)
+                {
+                    isProcessingSpeechQueue = false;
+                    return;
+                }
+
+                request = speechQueue.Dequeue();
+            }
+
+            for (var i = 0; i < request.RepeatCount; i++)
+            {
+                Speak(request.Text);
+                if (i < request.RepeatCount - 1)
                 {
                     await Task.Delay(Math.Clamp(settings.RepeatDelayMilliseconds, 500, 4000));
                 }
             }
-        });
-    }
-
-    private string ApplyPronunciationOverrides(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text) || settings.PronunciationOverrides.Count == 0)
-        {
-            return text;
         }
-
-        var spoken = text;
-        foreach (var pair in settings.PronunciationOverrides)
-        {
-            if (string.IsNullOrWhiteSpace(pair.Key) || string.IsNullOrWhiteSpace(pair.Value))
-            {
-                continue;
-            }
-
-            spoken = Regex.Replace(
-                spoken,
-                $@"\b{Regex.Escape(pair.Key)}\b",
-                pair.Value,
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        }
-
-        return spoken;
     }
 
     private string SpellDepartmentCodes(string text)
@@ -655,15 +664,16 @@ internal sealed class QueueAnnouncer
     {
         try
         {
-            const int speakAsync = 1;
-            const int purgeBeforeSpeak = 2;
-            voice?.Speak(text, speakAsync | purgeBeforeSpeak);
+            const int speakSynchronously = 0;
+            voice?.Speak(text, speakSynchronously);
         }
         catch
         {
             voice = null;
         }
     }
+
+    private sealed record SpeechRequest(string Text, int RepeatCount);
 
     private static dynamic? CreateVoice()
     {
@@ -1011,7 +1021,8 @@ internal static class HospitalQueueData
             else
             {
                 var configuredAccent = ColorTranslator.ToHtml(account.Accent);
-                if (string.IsNullOrWhiteSpace(existing.Name))
+                if (string.IsNullOrWhiteSpace(existing.Name) ||
+                    !string.Equals(existing.Name, account.Name, StringComparison.Ordinal))
                 {
                     existing.Name = account.Name;
                 }

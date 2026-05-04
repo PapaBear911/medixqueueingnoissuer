@@ -10,12 +10,14 @@ public partial class Form1 : Form
     private Label heroTimeLabel = null!;
     private Label headlineNumber = null!;
     private Label headlineMeta = null!;
+    private Label headlineLane = null!;
     private PictureBox heroLeftLogo = null!;
     private PictureBox heroRightLogo = null!;
     private ComboBox voiceCombo = null!;
     private ToggleSwitch modeToggle = null!;
     private QueueAnnouncer announcer = null!;
-    private string lastAnnouncedCallKey = "";
+    private readonly HashSet<string> announcedCallKeys = new(StringComparer.OrdinalIgnoreCase);
+    private bool announcementTrackerInitialized;
     private System.Windows.Forms.Timer refreshTimer = null!;
     private bool borderlessFullScreen = true;
     private bool useLightMode;
@@ -56,7 +58,7 @@ public partial class Form1 : Form
         KeyPreview = true;
         KeyDown -= HandleHotKeys;
         KeyDown += HandleHotKeys;
-        Icon = AppImages.LoadIconFromImage(settings.ResolvePath(settings.Logos.MultiDepartmentQueueingIconPath)) ?? Icon;
+        Icon = AppImages.LoadIconFromImage(settings.ResolvePath(settings.Logos.SecondaryLogoPath)) ?? Icon;
 
         var root = new TableLayoutPanel
         {
@@ -149,15 +151,21 @@ public partial class Form1 : Form
             Margin = new Padding(10, 0, 0, 0)
         };
 
-        var center = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = theme.Surface, Margin = new Padding(0), Padding = new Padding(0) };
-        center.RowStyles.Add(new RowStyle(SizeType.Percent, 64));
-        center.RowStyles.Add(new RowStyle(SizeType.Percent, 36));
+        var center = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, BackColor = theme.Surface, Margin = new Padding(0), Padding = new Padding(0) };
+        center.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
+        center.RowStyles.Add(new RowStyle(SizeType.Percent, 27));
+        center.RowStyles.Add(new RowStyle(SizeType.Percent, 15));
         headlineNumber = MakeLabel("--", 116, FontStyle.Bold, theme.PrimaryText, theme.Surface);
         headlineNumber.TextAlign = ContentAlignment.MiddleCenter;
-        headlineMeta = MakeLabel("Please wait for your number to be called", 43, FontStyle.Bold, theme.CardText, theme.Surface);
+        headlineMeta = MakeLabel("Please wait for your number to be called", 24, FontStyle.Bold, theme.CardText, theme.Surface);
         headlineMeta.TextAlign = ContentAlignment.MiddleCenter;
+        headlineMeta.AutoEllipsis = false;
+        headlineLane = MakeLabel("", 24, FontStyle.Bold, theme.SecondaryText, theme.Surface);
+        headlineLane.TextAlign = ContentAlignment.MiddleCenter;
+        headlineLane.AutoEllipsis = false;
         center.Controls.Add(headlineNumber, 0, 0);
         center.Controls.Add(headlineMeta, 0, 1);
+        center.Controls.Add(headlineLane, 0, 2);
 
         main.Controls.Add(heroLeftLogo, 0, 0);
         main.Controls.Add(center, 1, 0);
@@ -293,20 +301,56 @@ public partial class Form1 : Form
         headlineNumber.Text = latest?.DisplayNumber ?? "--";
         headlineMeta.Text = latest is null
             ? "Please wait for your number to be called"
-            : $"{latest.DepartmentName}  |  {latest.CounterName}  |  {(latest.Kind == TicketKind.Priority ? "Priority Lane" : "Regular Lane")}";
+            : $"{latest.DepartmentName} - {latest.CounterName}";
+        headlineLane.Text = latest is null
+            ? ""
+            : latest.Kind == TicketKind.Priority ? "Priority Lane" : "Regular Lane";
+        RefitHeroMetaText();
 
-        if (latest is not null)
-        {
-            var callKey = $"{latest.DisplayNumber}:{latest.CounterName}:{latest.CalledAt:O}";
-            if (callKey != lastAnnouncedCallKey)
-            {
-                lastAnnouncedCallKey = callKey;
-                announcer.Announce(latest);
-            }
-        }
+        QueueNewAnnouncements(state.RecentCalls);
 
         RebuildDepartmentGrid(state.Departments);
         RebuildRecentGrid(state.RecentCalls);
+    }
+
+    private void QueueNewAnnouncements(IReadOnlyList<CalledTicket> recentCalls)
+    {
+        var calledTickets = recentCalls
+            .Where(call => call.Status == "Called")
+            .ToList();
+
+        if (!announcementTrackerInitialized)
+        {
+            foreach (var call in calledTickets)
+            {
+                announcedCallKeys.Add(BuildCallKey(call));
+            }
+
+            var latest = calledTickets.FirstOrDefault();
+            if (latest is not null)
+            {
+                announcer.Announce(latest);
+            }
+
+            announcementTrackerInitialized = true;
+            return;
+        }
+
+        var newCalls = calledTickets
+            .Where(call => !announcedCallKeys.Contains(BuildCallKey(call)))
+            .Reverse()
+            .ToList();
+
+        foreach (var call in newCalls)
+        {
+            announcedCallKeys.Add(BuildCallKey(call));
+            announcer.Announce(call);
+        }
+    }
+
+    private static string BuildCallKey(CalledTicket call)
+    {
+        return $"{call.DisplayNumber}:{call.CounterName}:{call.CalledAt:O}";
     }
 
     private static string BuildSignature(QueueState state)
@@ -519,6 +563,39 @@ public partial class Form1 : Form
     private static string TextOrDefault(string? value, string fallback)
     {
         return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    }
+
+    private void RefitHeroMetaText()
+    {
+        RefitLabelToSingleLine(headlineMeta, 34F, 14F, FontStyle.Bold);
+        RefitLabelToSingleLine(headlineLane, 24F, 12F, FontStyle.Bold);
+    }
+
+    private static void RefitLabelToSingleLine(Label label, float maxSize, float minSize, FontStyle style)
+    {
+        if (label is null || label.ClientSize.Width <= 0 || string.IsNullOrWhiteSpace(label.Text))
+        {
+            return;
+        }
+
+        var availableWidth = Math.Max(1, label.ClientSize.Width - label.Padding.Horizontal - 8);
+        var availableHeight = Math.Max(1, label.ClientSize.Height - label.Padding.Vertical - 2);
+        for (var size = maxSize; size >= minSize; size -= 0.5F)
+        {
+            using var font = new Font("Segoe UI", size, style);
+            var measured = TextRenderer.MeasureText(label.Text, font, new Size(availableWidth, availableHeight), TextFormatFlags.SingleLine);
+            if (measured.Width <= availableWidth && measured.Height <= availableHeight)
+            {
+                if (Math.Abs(label.Font.Size - size) > 0.1F)
+                {
+                    label.Font = new Font("Segoe UI", size, style);
+                }
+
+                return;
+            }
+        }
+
+        label.Font = new Font("Segoe UI", minSize, style);
     }
 
     private void RefitHeaderTitle()

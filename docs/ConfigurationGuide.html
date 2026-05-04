@@ -17,14 +17,43 @@
 </head>
 <body>
   <h1>Hospital Queueing System Configuration Guide</h1>
-  <p><b>Apps:</b> MultiDepartmentQueueing display/dashboard and HospitalQueueCaller counter app.</p>
+  <p><b>Documentation Made by:</b> Ver Sangil</p>
+  <p><b>Apps:</b> MultiDepartmentQueueing display/dashboard, HospitalQueueCaller counter app, and HospitalQueueAdminSetup configuration tool.</p>
+
+  <h2>Runtime Requirement</h2>
+  <p>All three apps target <code>net8.0-windows</code>, so each Windows PC that will run the Display, Caller, or Admin Setup app must have the .NET 8 Desktop Runtime installed.</p>
+  <ul>
+    <li>Official Microsoft download page: <a href="https://dotnet.microsoft.com/en-US/download/dotnet/8.0">https://dotnet.microsoft.com/en-US/download/dotnet/8.0</a></li>
+    <li>Choose <code>.NET Desktop Runtime 8.0</code> for Windows.</li>
+    <li>Use the <code>x64</code> installer for most modern Windows PCs.</li>
+    <li>The Desktop Runtime includes the base .NET Runtime, so a separate .NET Runtime install is not needed.</li>
+  </ul>
+
+  <h2>Admin Setup Application</h2>
+  <p>Use <code>HospitalQueueAdminSetup</code> before deployment to centralize configuration for both apps.</p>
+  <p>The setup app can select Display and Caller app folders, configure same-PC or network queue storage, manage departments, manage caller users, allow multiple users per department, synchronize departments and queue state path into both appsettings files, and save caller users into <code>HospitalQueueCaller/config/users.txt</code>.</p>
+  <pre>dotnet build .\HospitalQueueAdminSetup\HospitalQueueAdminSetup.csproj -o .\verify-build\admin</pre>
+  <p>Run <code>verify-build/admin/HospitalQueueAdminSetup.exe</code>.</p>
+  <ol>
+    <li>Build the Display, Caller, and Admin Setup apps.</li>
+    <li>Open <code>HospitalQueueAdminSetup</code>.</li>
+    <li>Select the Display app folder.</li>
+    <li>Select the Caller app folder.</li>
+    <li>Choose same-PC mode or a network/shared queue state path.</li>
+    <li>Review or edit departments and caller users.</li>
+    <li>Use <code>Remove Selected Department</code> or <code>Remove Selected User</code> before rollout when needed.</li>
+    <li>Click <code>Validate</code>.</li>
+    <li>Click <code>Save and Sync</code>.</li>
+    <li>Restart Display and Caller apps so they reload synchronized configuration.</li>
+  </ol>
+  <p>The setup app does not need a user for every department, but any department that staff will issue or call numbers from needs at least one caller user.</p>
 
   <h2>Logos and Display Text</h2>
   <p>Logo paths are relative to each app folder unless an absolute path is provided.</p>
   <pre>"Logos": {
-  "MainLogoPath": "assets/logos/MedixHMSFullLogo.png",
-  "SecondaryLogoPath": "assets/logos/SKPH Hospital Logo.png",
-  "MultiDepartmentQueueingIconPath": "assets/icons/MultiDepartmentQueueing.png",
+  "MainLogoPath": "assets/logos/MainLogo.png",
+  "SecondaryLogoPath": "assets/logos/SecondaryLogo.png",
+  "MultiDepartmentQueueingIconPath": "assets/logos/SecondaryLogo.png",
   "HospitalQueueCallerIconPath": "assets/icons/MedixHMSIcon.png"
 },
 "DisplayText": {
@@ -32,7 +61,7 @@
   "HeaderTitle": "Sultan Kudarat Provincial Hospital Queuing System",
   "NowServingTitle": "Now Serving"
 }</pre>
-  <p>The caller app uses the Medix HMS logo and <code>HospitalQueueCallerIconPath</code>; its secondary display logo is blank.</p>
+  <p>The display app window icon always uses the configured secondary logo. The caller app uses the Medix HMS logo and <code>HospitalQueueCallerIconPath</code>; its secondary display logo is blank.</p>
 
   <h2>Queue Storage</h2>
   <pre>"QueueStorage": {
@@ -58,15 +87,40 @@
       <tr><td>Urology</td><td>URO</td></tr>
       <tr><td>Family Medicine</td><td>FM</td></tr>
       <tr><td>Pediatrics</td><td>PED</td></tr>
-      <tr><td>Internal Medicine - Cardiology</td><td>IMC</td></tr>
-      <tr><td>Internal Medicine - Neurology</td><td>NEU</td></tr>
-      <tr><td>Internal Medicine - Nephrology</td><td>NEP</td></tr>
-      <tr><td>Internal Medicine - Pulmonology</td><td>PUL</td></tr>
-      <tr><td>Internal Medicine - Gastroenterology</td><td>GAS</td></tr>
-      <tr><td>Internal Medicine - Oncology</td><td>ONC</td></tr>
+      <tr><td>Internal Medicine-Cardiology</td><td>IMC</td></tr>
+      <tr><td>Internal Medicine-Neurology</td><td>NEU</td></tr>
+      <tr><td>Internal Medicine-Nephrology</td><td>NEP</td></tr>
+      <tr><td>Internal Medicine-Pulmonology</td><td>PUL</td></tr>
+      <tr><td>Internal Medicine-Gastroenterology</td><td>GAS</td></tr>
+      <tr><td>Internal Medicine-Oncology</td><td>ONC</td></tr>
       <tr><td>FAMED-AnimalBite</td><td>FAB</td></tr>
     </tbody>
   </table>
+
+  <h2>Accent Colors</h2>
+  <p>Use hex colors for department <code>AccentColor</code> values. A good source is the Tailwind CSS color palette: <a href="https://tailwindcss.com/docs/colors">https://tailwindcss.com/docs/colors</a>.</p>
+  <p>For this app, prefer Tailwind <code>600</code> or <code>700</code> shades. They are strong enough for the dark display UI while still readable on the light caller/admin UI.</p>
+  <table>
+    <thead><tr><th>Color</th><th>Hex</th><th>Good Use</th></tr></thead>
+    <tbody>
+      <tr><td>Blue 600</td><td><code>#2563EB</code></td><td>General services, Dental</td></tr>
+      <tr><td>Red 600</td><td><code>#DC2626</code></td><td>Urgent or bite-related services</td></tr>
+      <tr><td>Pink 600</td><td><code>#DB2777</code></td><td>Family Planning, OB-Gyne variants</td></tr>
+      <tr><td>Purple 600</td><td><code>#9333EA</code></td><td>Specialty clinics</td></tr>
+      <tr><td>Violet 600</td><td><code>#7C3AED</code></td><td>Ophthalmology or specialty care</td></tr>
+      <tr><td>Orange 600</td><td><code>#EA580C</code></td><td>Surgery or procedure areas</td></tr>
+      <tr><td>Amber 600</td><td><code>#D97706</code></td><td>Priority-highlight departments</td></tr>
+      <tr><td>Yellow 600</td><td><code>#CA8A04</code></td><td>Orthopedic or support departments</td></tr>
+      <tr><td>Cyan 600</td><td><code>#0891B2</code></td><td>Urology, diagnostics, or navigation-friendly services</td></tr>
+      <tr><td>Teal 600</td><td><code>#0D9488</code></td><td>Pulmonology or calming clinical services</td></tr>
+      <tr><td>Green 600</td><td><code>#16A34A</code></td><td>Pediatrics, cleared/active services</td></tr>
+      <tr><td>Emerald 600</td><td><code>#059669</code></td><td>Family Medicine or general outpatient services</td></tr>
+      <tr><td>Rose 700</td><td><code>#BE123C</code></td><td>Oncology or high-emphasis services</td></tr>
+      <tr><td>Indigo 600</td><td><code>#4F46E5</code></td><td>Neurology or specialty services</td></tr>
+      <tr><td>Sky 600</td><td><code>#0284C7</code></td><td>Nephrology, diagnostics, or information counters</td></tr>
+    </tbody>
+  </table>
+  <p>Avoid very pale colors such as <code>#BFDBFE</code> or <code>#FEF3C7</code> because they can look weak on the dark display. Avoid very dark colors such as <code>#1E293B</code> because they can blend into the display background.</p>
 
   <h2>Caller Users</h2>
   <pre>username|password|departmentCode|displayName</pre>
@@ -81,32 +135,104 @@ orthopedic|1234|ORT|Orthopedic
 urology|1234|URO|Urology
 familymedicine|1234|FM|Family Medicine
 pediatrics|1234|PED|Pediatrics
-cardiology|1234|IMC|Internal Medicine - Cardiology
-neurology|1234|NEU|Internal Medicine - Neurology
-nephrology|1234|NEP|Internal Medicine - Nephrology
-pulmonology|1234|PUL|Internal Medicine - Pulmonology
-gastroenterology|1234|GAS|Internal Medicine - Gastroenterology
-oncology|1234|ONC|Internal Medicine - Oncology
+cardiology|1234|IMC|Internal Medicine-Cardiology
+neurology|1234|NEU|Internal Medicine-Neurology
+nephrology|1234|NEP|Internal Medicine-Nephrology
+pulmonology|1234|PUL|Internal Medicine-Pulmonology
+gastroenterology|1234|GAS|Internal Medicine-Gastroenterology
+oncology|1234|ONC|Internal Medicine-Oncology
 famedanimalbite|1234|FAB|FAMED-AnimalBite</pre>
 
-  <h2>Print</h2>
-  <pre>"Print": {
-  "PrinterMode": "Default",
-  "PrinterName": "",
-  "TicketTempFolder": "%TEMP%/HospitalQueueTickets",
-  "PaperName": "Queue Ticket 58x90mm",
-  "PaperWidthHundredthsInch": 228,
-  "PaperHeightHundredthsInch": 354
-}</pre>
-  <p>Ticket and print settings are shared configuration values for queue ticket workflows.</p>
+  <h2>Adding Users</h2>
+  <p>Add caller users in <code>HospitalQueueAdminSetup</code>. The caller app no longer has a registration screen. The setup app writes users to <code>HospitalQueueCaller/config/users.txt</code>.</p>
+  <pre>username|password|departmentCode|displayName</pre>
+  <p>Multiple users can use the same department. They share the same department queue, number sequence, current call, waiting tickets, and display card because the queue is keyed by department code.</p>
+  <pre>dental1|1234|DEN|Dental Counter 1
+dental2|1234|DEN|Dental Counter 2</pre>
+  <p>Synchronization requirements:</p>
+  <ul>
+    <li>The user only needs to be added in Admin Setup, which saves to the caller app <code>users.txt</code>.</li>
+    <li>The user's <code>departmentCode</code> must already exist in the caller app <code>Departments</code> list.</li>
+    <li>The same department code should also exist in the display app <code>Departments</code> list so the dashboard shows the correct name and color.</li>
+    <li>If caller apps run on multiple PCs, copy the updated <code>users.txt</code> to each caller app installation that needs those logins.</li>
+    <li>Keep <code>QueueStorage.StateFilePath</code> the same on all caller and display apps.</li>
+  </ul>
+
+  <h2>Adding a New Department</h2>
+  <p>Preferred workflow:</p>
+  <ol>
+    <li>Open <code>HospitalQueueAdminSetup</code>.</li>
+    <li>Select the Display app folder and Caller app folder.</li>
+    <li>Add a row in <code>Departments</code>.</li>
+    <li>Add at least one matching row in <code>Caller Users</code> if staff will issue or call numbers for this department.</li>
+    <li>Click <code>Validate</code>.</li>
+    <li>Click <code>Save and Sync</code>.</li>
+    <li>Restart the Display and Caller apps.</li>
+  </ol>
+  <p>This adds or updates the department in both appsettings files, adds or updates users in <code>users.txt</code>, and saves the same queue state path into both apps.</p>
+  <p>Manual configuration pattern:</p>
+  <pre>{ "Name": "New Department", "Code": "NEW", "AccentColor": "#1D4ED8" }</pre>
+  <pre>newdepartment|1234|NEW|New Department</pre>
+  <p>User requirement after adding a department:</p>
+  <ul>
+    <li>If staff need to log in and issue or call numbers for the new department, at least one caller user is required.</li>
+    <li>If the department is display-only and no one will call numbers for it yet, a user is not technically required.</li>
+    <li>The centralized setup workflow keeps Display and Caller synchronized, so use it for normal operation before rollout.</li>
+  </ul>
+  <p>Synchronization requirements:</p>
+  <ul>
+    <li>Add the same department object to both <code>HospitalQueueCaller/appsettings.json</code> and <code>MultiDepartmentQueueing/appsettings.json</code>.</li>
+    <li>Use the exact same <code>Code</code> in both apps and in <code>users.txt</code>.</li>
+    <li>Use the same <code>QueueStorage.StateFilePath</code> in both apps.</li>
+    <li>Rebuild or redeploy both apps after changing source config files, or update deployed <code>appsettings.json</code> files directly.</li>
+    <li>Restart the display app and caller app after config changes.</li>
+  </ul>
+
+  <h2>Removing a Department</h2>
+  <p>Preferred workflow:</p>
+  <ol>
+    <li>Open <code>HospitalQueueAdminSetup</code>.</li>
+    <li>Select the department row.</li>
+    <li>Click <code>Remove Selected Department</code>.</li>
+    <li>Confirm the removal. Matching caller users are removed at the same time.</li>
+    <li>Click <code>Validate</code>.</li>
+    <li>Click <code>Save and Sync</code>.</li>
+    <li>Restart the caller app and display app.</li>
+  </ol>
+  <p>Manual fallback:</p>
+  <ol>
+    <li>In <code>HospitalQueueCaller/appsettings.json</code>, remove the department object from <code>Departments</code>.</li>
+    <li>In <code>MultiDepartmentQueueing/appsettings.json</code>, remove the matching department object from <code>Departments</code>.</li>
+    <li>In <code>HospitalQueueCaller/config/users.txt</code>, remove every user line whose <code>departmentCode</code> matches the removed department.</li>
+    <li>Restart the caller app and display app.</li>
+  </ol>
+  <p>Example: to remove <code>NEW</code>, delete this department object from both appsettings files:</p>
+  <pre>{ "Name": "New Department", "Code": "NEW", "AccentColor": "#1D4ED8" }</pre>
+  <p>Then remove all matching users:</p>
+  <pre>newdepartment|1234|NEW|New Department</pre>
+  <p>Synchronization and queue-state notes:</p>
+  <ul>
+    <li>Removing a department from only one app creates mismatched behavior.</li>
+    <li>Existing queue state can preserve old departments already present in the state file. To make a removed department disappear immediately from live state, stop both apps and clear or edit the shared queue state file after backing it up.</li>
+    <li>Daily reset clears tickets and current calls, but both app configuration files still need to stay synchronized.</li>
+    <li>If multiple caller PCs exist, remove the department users from each caller installation's <code>users.txt</code>.</li>
+  </ul>
+
+  <h2>Caller Operation</h2>
+  <p>The caller app can call regular numbers, call priority numbers, skip the current number, and repeat the current call.</p>
+  <ul>
+    <li>After a successful call, <code>Repeat Call</code> is disabled for 5 seconds.</li>
+    <li>After a successful repeat, <code>Repeat Call</code> is disabled again for 5 seconds.</li>
+    <li>During cooldown, the button shows a countdown such as <code>Repeat Call (5s)</code>.</li>
+    <li>This delay prevents accidental rapid repeat clicks while still allowing staff to repeat the call after a short pause.</li>
+  </ul>
 
   <h2>Speech</h2>
   <p>Display app speech is enabled; caller app speech is disabled. The display uses installed Windows voices and supports placeholders <code>{Number}</code>, <code>{Counter}</code>, <code>{Department}</code>, and <code>{Lane}</code>.</p>
   <pre>"VoiceName": "Microsoft David Desktop",
-"PronunciationOverrides": {
-  "AB": "ey bi",
-  "AP": "ey bi"
-}</pre>
+"AnnouncementFormat": "Now serving number {Number}. Please proceed to {Counter}, {Department}."</pre>
+  <p>Configured department codes are automatically spaced for speech, so a ticket like <code>NEP-R001</code> is spoken as <code>N E P-R001</code>.</p>
+  <p>If multiple caller users call numbers at nearly the same time, the display app queues every new call and announces them one by one. Speech announcements are processed oldest-to-newest from the newly detected calls, so a newer call does not cancel a call that is already being spoken.</p>
 
   <h2>UI Theme</h2>
   <p><code>UI.Theme</code> can be <code>Dark</code> or <code>Light</code>. Display defaults to dark mode; caller defaults to light mode.</p>
@@ -118,7 +244,8 @@ famedanimalbite|1234|FAB|FAMED-AnimalBite</pre>
   <pre>$env:DOTNET_CLI_HOME='C:\Users\Ver\OneDrive\Documents\QueueuingNoIssuer\.dotnet_home'
 $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1'
 dotnet build .\HospitalQueueCaller\HospitalQueueCaller.csproj -o .\verify-build\caller
-dotnet build .\MultiDepartmentQueueing\MultiDepartmentQueueing.csproj -o .\verify-build\display</pre>
-  <p>Expected outputs are <code>verify-build/caller/HospitalQueueCaller.exe</code> and <code>verify-build/display/MultiDepartmentQueueing.exe</code>.</p>
+dotnet build .\MultiDepartmentQueueing\MultiDepartmentQueueing.csproj -o .\verify-build\display
+dotnet build .\HospitalQueueAdminSetup\HospitalQueueAdminSetup.csproj -o .\verify-build\admin</pre>
+  <p>Expected outputs are <code>verify-build/caller/HospitalQueueCaller.exe</code>, <code>verify-build/display/MultiDepartmentQueueing.exe</code>, and <code>verify-build/admin/HospitalQueueAdminSetup.exe</code>.</p>
 </body>
 </html>

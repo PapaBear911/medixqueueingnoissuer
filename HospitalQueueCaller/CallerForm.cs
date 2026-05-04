@@ -21,6 +21,9 @@ internal sealed class CallerForm : Form
     private Label accountLabel = null!;
     private Label nextLabel = null!;
     private HiddenScrollFlowPanel departmentPreviewList = null!;
+    private Button repeatButton = null!;
+    private System.Windows.Forms.Timer repeatCooldownTimer = null!;
+    private DateTime repeatAvailableAt = DateTime.MinValue;
     private DepartmentAccount? activeAccount;
     private CalledTicket? currentTicket;
 
@@ -83,7 +86,7 @@ internal sealed class CallerForm : Form
         intro.Controls.Add(BuildDepartmentPreview(), 0, 4);
 
         var card = new RoundedPanel { Dock = DockStyle.Fill, Radius = 18, BackColor = theme.Card, Padding = new Padding(30) };
-        var form = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 11, BackColor = theme.Card };
+        var form = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 10, BackColor = theme.Card };
         form.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
         form.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         form.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
@@ -92,7 +95,6 @@ internal sealed class CallerForm : Form
         form.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         form.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
         form.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
-        form.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         form.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         form.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -111,15 +113,6 @@ internal sealed class CallerForm : Form
         loginButton.Click += (_, _) => AttemptLogin();
         form.Controls.Add(loginButton, 0, 7);
 
-        var registerButton = new ModernButton("Register User / Department", theme.Success)
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0, 0, 0, 8),
-            Font = new Font("Segoe UI", 10F, FontStyle.Bold)
-        };
-        registerButton.Click += (_, _) => ShowRegistrationDialog();
-        form.Controls.Add(registerButton, 0, 8);
-
         var themeButton = new ModernButton(useLightMode ? "Switch to Dark Mode" : "Switch to Light Mode", theme.Success)
         {
             Dock = DockStyle.Fill,
@@ -127,10 +120,10 @@ internal sealed class CallerForm : Form
             Font = new Font("Segoe UI", 10F, FontStyle.Bold)
         };
         themeButton.Click += (_, _) => ToggleTheme();
-        form.Controls.Add(themeButton, 0, 9);
+        form.Controls.Add(themeButton, 0, 8);
 
         errorLabel = MakeLabel("", 10, FontStyle.Bold, theme.Danger, theme.Card, DockStyle.Top, 36);
-        form.Controls.Add(errorLabel, 0, 10);
+        form.Controls.Add(errorLabel, 0, 9);
         card.Controls.Add(form);
 
         shell.Controls.Add(intro, 0, 0);
@@ -179,127 +172,6 @@ internal sealed class CallerForm : Form
         return panel;
     }
 
-    private void ShowRegistrationDialog()
-    {
-        using var dialog = new Form
-        {
-            Text = "Register User / Department",
-            StartPosition = FormStartPosition.CenterParent,
-            Size = new Size(520, 560),
-            MinimumSize = new Size(520, 560),
-            BackColor = theme.Background,
-            Font = new Font("Segoe UI", 10F)
-        };
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            RowCount = 13,
-            ColumnCount = 1,
-            Padding = new Padding(24),
-            BackColor = theme.Background
-        };
-        for (var i = 0; i < 12; i++)
-        {
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, i % 2 == 0 ? 30 : 46));
-        }
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var departmentName = MakeDialogTextBox("");
-        var departmentCode = MakeDialogTextBox("");
-        var accentColor = MakeDialogTextBox("#1D4ED8");
-        var username = MakeDialogTextBox("");
-        var password = MakeDialogTextBox("");
-        password.UseSystemPasswordChar = true;
-        var displayName = MakeDialogTextBox("");
-        var status = MakeLabel("", 9, FontStyle.Bold, theme.Danger, theme.Background, DockStyle.Fill);
-
-        layout.Controls.Add(MakeLabel("Department Name", 10, FontStyle.Bold, theme.SecondaryText, theme.Background, DockStyle.Fill), 0, 0);
-        layout.Controls.Add(departmentName, 0, 1);
-        layout.Controls.Add(MakeLabel("Department Code", 10, FontStyle.Bold, theme.SecondaryText, theme.Background, DockStyle.Fill), 0, 2);
-        layout.Controls.Add(departmentCode, 0, 3);
-        layout.Controls.Add(MakeLabel("Accent Color Hex", 10, FontStyle.Bold, theme.SecondaryText, theme.Background, DockStyle.Fill), 0, 4);
-        layout.Controls.Add(accentColor, 0, 5);
-        layout.Controls.Add(MakeLabel("Username", 10, FontStyle.Bold, theme.SecondaryText, theme.Background, DockStyle.Fill), 0, 6);
-        layout.Controls.Add(username, 0, 7);
-        layout.Controls.Add(MakeLabel("Password", 10, FontStyle.Bold, theme.SecondaryText, theme.Background, DockStyle.Fill), 0, 8);
-        layout.Controls.Add(password, 0, 9);
-        layout.Controls.Add(MakeLabel("Display Name", 10, FontStyle.Bold, theme.SecondaryText, theme.Background, DockStyle.Fill), 0, 10);
-        layout.Controls.Add(displayName, 0, 11);
-
-        var buttonRow = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, Height = 60, BackColor = theme.Background };
-        buttonRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        buttonRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        var save = new ModernButton("Save", theme.Success) { Dock = DockStyle.Fill };
-        var cancel = new ModernButton("Cancel", theme.Danger) { Dock = DockStyle.Fill };
-        cancel.Click += (_, _) => dialog.Close();
-        save.Click += (_, _) =>
-        {
-            var name = departmentName.Text.Trim();
-            var code = departmentCode.Text.Trim().ToUpperInvariant();
-            if (string.IsNullOrWhiteSpace(code) && !string.IsNullOrWhiteSpace(name))
-            {
-                code = GenerateDepartmentCode(name);
-            }
-
-            if (string.IsNullOrWhiteSpace(name) ||
-                string.IsNullOrWhiteSpace(code) ||
-                string.IsNullOrWhiteSpace(username.Text) ||
-                string.IsNullOrWhiteSpace(password.Text))
-            {
-                status.Text = "Department name, code, username, and password are required.";
-                return;
-            }
-
-            var department = new DepartmentSettings
-            {
-                Name = name,
-                Code = code,
-                AccentColor = string.IsNullOrWhiteSpace(accentColor.Text) ? "#1D4ED8" : accentColor.Text.Trim()
-            };
-
-            settings.AddOrUpdateDepartment(department);
-            settings.AddOrUpdateUser(username.Text, password.Text, code, string.IsNullOrWhiteSpace(displayName.Text) ? name : displayName.Text);
-            settings.Save();
-            HospitalQueueData.AddOrUpdateDepartment(department);
-            LoadSettings();
-            BuildUi();
-            ShowLogin();
-            dialog.Close();
-        };
-        buttonRow.Controls.Add(save, 0, 0);
-        buttonRow.Controls.Add(cancel, 1, 0);
-
-        var bottom = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = theme.Background };
-        bottom.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
-        bottom.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        bottom.Controls.Add(buttonRow, 0, 0);
-        bottom.Controls.Add(status, 0, 1);
-        layout.Controls.Add(bottom, 0, 12);
-        dialog.Controls.Add(layout);
-        dialog.ShowDialog(this);
-    }
-
-    private TextBox MakeDialogTextBox(string text)
-    {
-        return new TextBox
-        {
-            Text = text,
-            Dock = DockStyle.Fill,
-            Font = new Font("Segoe UI", 13F),
-            BackColor = theme.Surface,
-            ForeColor = theme.PrimaryText,
-            BorderStyle = BorderStyle.FixedSingle,
-            Margin = new Padding(0, 0, 0, 8)
-        };
-    }
-
-    private static string GenerateDepartmentCode(string departmentName)
-    {
-        var letters = new string(departmentName.Where(char.IsLetterOrDigit).Take(3).ToArray()).ToUpperInvariant();
-        return letters.PadRight(3, 'X');
-    }
-
     private void BuildWorkPanel()
     {
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, BackColor = theme.Background };
@@ -346,14 +218,14 @@ internal sealed class CallerForm : Form
         callPriority.Click += (_, _) => Call(TicketKind.Priority);
         var skip = new ModernButton("Skip Current", theme.Danger) { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 10, 14) };
         skip.Click += (_, _) => Skip();
-        var repeat = new ModernButton("Repeat Call", theme.Success) { Dock = DockStyle.Fill, Margin = new Padding(10, 0, 0, 14) };
-        repeat.Click += (_, _) => RepeatCall();
+        repeatButton = new ModernButton("Repeat Call", theme.Success) { Dock = DockStyle.Fill, Margin = new Padding(10, 0, 0, 14) };
+        repeatButton.Click += (_, _) => RepeatCall();
 
         var config = BuildNumberConfig();
         controls.Controls.Add(callRegular, 0, 0);
         controls.Controls.Add(callPriority, 1, 0);
         controls.Controls.Add(skip, 0, 1);
-        controls.Controls.Add(repeat, 1, 1);
+        controls.Controls.Add(repeatButton, 1, 1);
         controls.SetColumnSpan(config, 2);
         controls.Controls.Add(config, 0, 2);
         root.Controls.Add(controls, 0, 2);
@@ -438,6 +310,7 @@ internal sealed class CallerForm : Form
         }
 
         RefreshCurrent();
+        StartRepeatCooldown();
     }
 
     private void Skip()
@@ -471,6 +344,7 @@ internal sealed class CallerForm : Form
         currentNumberLabel.Text = currentTicket.DisplayNumber;
         currentNumberLabel.ForeColor = currentTicket.Kind == TicketKind.Priority ? theme.Priority : theme.Accent;
         currentMetaLabel.Text = $"Repeated {currentTicket.Kind} call at {currentTicket.CalledAt:hh:mm tt}";
+        StartRepeatCooldown();
     }
 
     private void SaveNextNumbers()
@@ -508,6 +382,37 @@ internal sealed class CallerForm : Form
         currentNumberLabel.Text = currentTicket.DisplayNumber;
         currentNumberLabel.ForeColor = currentTicket.Kind == TicketKind.Priority ? theme.Priority : theme.Accent;
         currentMetaLabel.Text = $"{currentTicket.Kind} lane - called at {currentTicket.CalledAt:hh:mm tt}";
+    }
+
+    private void StartRepeatCooldown()
+    {
+        repeatAvailableAt = DateTime.Now.AddSeconds(5);
+        repeatCooldownTimer?.Stop();
+        repeatCooldownTimer?.Dispose();
+        repeatCooldownTimer = new System.Windows.Forms.Timer { Interval = 250 };
+        repeatCooldownTimer.Tick += (_, _) => UpdateRepeatCooldown();
+        repeatCooldownTimer.Start();
+        UpdateRepeatCooldown();
+    }
+
+    private void UpdateRepeatCooldown()
+    {
+        if (repeatButton is null)
+        {
+            return;
+        }
+
+        var remaining = repeatAvailableAt - DateTime.Now;
+        if (remaining <= TimeSpan.Zero)
+        {
+            repeatCooldownTimer?.Stop();
+            repeatButton.Enabled = true;
+            repeatButton.Text = "Repeat Call";
+            return;
+        }
+
+        repeatButton.Enabled = false;
+        repeatButton.Text = $"Repeat Call ({Math.Ceiling(remaining.TotalSeconds):0}s)";
     }
 
     private void ShowLogin()
